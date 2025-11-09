@@ -114,18 +114,22 @@
 
         .card {
             position: absolute;
-            width: 220px;
+            /* 默认高度改为 auto，让内容撑开，同时保留最小高度 */
+            height: auto;
+            min-height: 140px; /* 最小高度 */
             border-radius: 12px;
             box-shadow: 0 16px 35px var(--card-shadow-color);
             background: #fff;
             border: 1px solid var(--card-border-color);
-            overflow: hidden;
+            overflow: hidden; /* 确保内容不会超出圆角边框 */
             opacity: 0;
             transform-origin: center;
             transition: transform 0.35s ease, opacity 0.35s ease, left 0.35s ease,
-                top 0.35s ease, width 0.35s ease, height 0.35s ease,
+                top 0.35s ease, width 0.35s ease, height 0.35s ease, /* height 动画 */
                 border-radius 0.35s ease, box-shadow 0.3s ease, border-color 0.3s ease;
             cursor: move;
+            display: flex;
+            flex-direction: column;
         }
 
         .card.dragging {
@@ -140,9 +144,9 @@
         .card.maximized {
             position: fixed;
             inset: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
             border-radius: 0;
             box-shadow: 0 28px 60px rgba(0, 0, 0, 0.4);
             cursor: auto;
@@ -163,6 +167,7 @@
             user-select: none;
             touch-action: pan-y;
             transition: background 0.3s ease;
+            flex-shrink: 0; /* 确保标题栏不会被挤压 */
         }
 
         .card.editing .card-header {
@@ -212,6 +217,11 @@
             border-color: #dea123;
         }
 
+        .window-controls .control.copy {
+            background: #007acc;
+            border-color: #0066b3;
+        }
+
         .window-controls .control::after {
             content: '';
             position: absolute;
@@ -234,7 +244,7 @@
             font-size: 10px;
             line-height: 1;
             font-weight: 700;
-            color: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.9);
         }
 
         .window-controls .control.maximize::after {
@@ -242,12 +252,12 @@
             height: 6px;
             background: linear-gradient(
                 45deg,
-                rgba(0, 0, 0, 0.6) 0%,
-                rgba(0, 0, 0, 0.6) 45%,
+                rgba(255, 255, 255, 0.9) 0%,
+                rgba(255, 255, 255, 0.9) 45%,
                 transparent 45%,
                 transparent 55%,
-                rgba(0, 0, 0, 0.6) 55%,
-                rgba(0, 0, 0, 0.6) 100%
+                rgba(255, 255, 255, 0.9) 55%,
+                rgba(255, 255, 255, 0.9) 100%
             );
         }
 
@@ -255,17 +265,43 @@
             content: '🎨';
             font-size: 8px;
             line-height: 1;
-            color: rgba(0, 0, 0, 0.7);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .window-controls .control.copy::after {
+            content: '📋';
+            font-size: 8px;
+            line-height: 1;
+            color: rgba(255, 255, 255, 0.9);
         }
 
         .card-title {
-            font-size: 17px;  /* 增大字号 */
+            font-size: 17px;
             font-weight: 600;
             color: var(--card-title-color);
             padding-left: 10px;
             flex: 1;
             transition: color 0.3s ease;
             user-select: text;
+            outline: none;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin: 0;
+            word-break: break-word; /* 确保标题文字换行 */
+        }
+
+        .card-title:empty:before {
+            content: '标题';
+            color: var(--card-body-color);
+            opacity: 0.5;
+            font-weight: 400;
+        }
+
+        .card-title:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
         .card.maximized .card-title {
@@ -289,24 +325,60 @@
             border-color: rgba(255, 255, 255, 0.3);
         }
 
+        .card-body-container {
+            flex: 1; /* 确保内容区域占据剩余空间 */
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            padding-bottom: 16px; /* 为 resize-handle 留出空间 */
+        }
+
         .card-body {
-            padding: 16px;
+            padding: 0 16px; /* 调整 padding */
             font-size: 16px;
             line-height: 1.4;
             font-weight: 600;
             color: var(--card-body-color);
             word-break: break-word;
             overflow-wrap: anywhere;
-            white-space: normal;
+            white-space: pre-wrap; /* 保持输入时的换行和空格 */
             transition: color 0.3s ease;
             user-select: text;
+            flex: 1; /* 确保内容主体占据剩余空间 */
+            outline: none;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            margin: 0 0 0 0; /* 移除底部 margin，由 container 统一管理 */
+            overflow-y: auto; /* 关键：内容溢出时显示滚动条 */
+            min-height: 60px; /* 确保 body 有最小高度 */
+        }
+
+        .card-body:empty:before {
+            content: '双击添加内容';
+            color: var(--card-body-color);
+            opacity: 0.5;
+            font-weight: 400;
+        }
+
+        .card-body:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card.maximized .card-body-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column; /* 保持 column */
+            align-items: center; /* 居中内容 */
+            justify-content: flex-start; /* 从顶部开始 */
+            width: 100%;
+            height: 100%;
+            padding-bottom: 0; /* 最大化时不需要底部 padding */
         }
 
         .card.maximized .card-body {
             flex: 1;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
             width: 100%;
             height: 100%;
             text-align: center;
@@ -319,6 +391,40 @@
             outline: none;
             cursor: text;
             content-editable: true;
+            margin: 0;
+            display: flex; /* 内部 flex 布局 */
+            align-items: flex-start; /* 保持内容顶部对齐 */
+            justify-content: center; /* 水平居中 */
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+        }
+
+        .card:hover .resize-handle,
+        .card.resizing .resize-handle {
+            opacity: 0.5;
+        }
+
+        .resize-handle::before {
+            content: '';
+            position: absolute;
+            bottom: 3px;
+            right: 3px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 0 10px 10px;
+            border-color: transparent transparent var(--card-body-color) transparent;
+            opacity: 0.4;
         }
 
         .edit-tools {
@@ -370,6 +476,7 @@
         @media (max-width: 768px) {
             .card {
                 width: 180px;
+                min-height: 100px; /* 移动端最小高度 */
                 border-radius: 10px;
             }
 
@@ -379,7 +486,11 @@
             }
 
             .card-title {
-                font-size: 14px;  /* 移动端也增大字号 */
+                font-size: 14px;
+            }
+
+            .resize-handle {
+                display: none;
             }
         }
 
@@ -491,6 +602,24 @@
         .selection-mode-hint.show {
             display: block;
         }
+
+        /* 复制成功提示 */
+        .copy-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1000000;
+        }
+
+        .copy-tooltip.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -502,8 +631,8 @@
 
     <script>
         // --- Supabase 初始化 ---
-        const SUPABASE_URL = 'https://wketotdrvgmijhywfqbv.supabase.co'; // <--- 在这里替换
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZXRvdGRydmdtaWpoeXdmcWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2NDk4NjksImV4cCI6MjA3ODIyNTg2OX0.P5lXhdebBpNOO3sjGCiALqD4xpzL1dKOKa7-9uYJQzg'; // <--- 在这里替换
+        const SUPABASE_URL = 'https://wketotdrvgmijhywfqbv.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZXRvdGRydmdtaWpoeXdmcWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2NDk4NjksImV4cCI6MjA3ODIyNTg2OX0.P5lXhdebBpNOO3sjGCiALqD4xpzL1dKOKa7-9uYJQzg';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const board = document.getElementById('board')
@@ -519,16 +648,29 @@
             'ctrl＋框选进行批量删除',
         ]
 
+        // 增加灰色和白色
         const colors = [
-            '#ffe0e3',
-            '#c7f0ff',
-            '#ffd8a8',
-            '#d9f2d9',
-            '#e5d7ff',
-            '#f9f7d9',
-            '#d2f0f8',
-            '#ffd4f5'
+            '#ffe0e3', // Light pink
+            '#c7f0ff', // Light blue
+            '#ffd8a8', // Light orange
+            '#d9f2d9', // Light green
+            '#e5d7ff', // Light purple
+            '#f9f7d9', // Light yellow
+            '#d2f0f8', // Pale blue
+            '#ffd4f5', // Pinkish purple
+            '#f0f0f0', // Light gray (新增)
+            '#ffffff'  // White (新增)
         ]
+
+        // 更多长宽比的便签形状 (宽, 高)
+        const initialCardDimensions = [
+            { width: 220, height: 140 }, // 默认尺寸
+            { width: 180, height: 180 }, // 正方形
+            { width: 260, height: 120 }, // 宽扁
+            { width: 160, height: 200 }, // 窄高
+            { width: 200, height: 100 }, // 更扁
+            { width: 240, height: 160 }  // 稍大
+        ];
 
         const cardStates = new WeakMap()
         const MAXIMIZED_LAYER = 1000000
@@ -617,9 +759,56 @@
                 toggleMaximize(card)
             } else if (control.classList.contains('color-change')) {
                 cycleCardColor(card)
+            } else if (control.classList.contains('copy')) {
+                copyCardContent(card)
             } else if (control.classList.contains('edit-tool-btn')) {
                 handleEditToolClick(control, card)
             }
+        }
+
+        // 复制便签内容功能
+        function copyCardContent(card) {
+            const bodyElement = card.querySelector('.card-body')
+            const content = bodyElement.innerText || bodyElement.textContent
+            
+            if (content.trim()) {
+                navigator.clipboard.writeText(content.trim()).then(() => {
+                    showCopyTooltip(card, '已复制内容')
+                }).catch(() => {
+                    // 降级方案
+                    const textarea = document.createElement('textarea')
+                    textarea.value = content.trim()
+                    textarea.style.position = 'fixed'
+                    textarea.style.opacity = '0'
+                    document.body.appendChild(textarea)
+                    textarea.select()
+                    document.execCommand('copy')
+                    document.body.removeChild(textarea)
+                    showCopyTooltip(card, '已复制内容')
+                })
+            } else {
+                showCopyTooltip(card, '内容为空')
+            }
+        }
+
+        // 显示复制提示
+        function showCopyTooltip(card, message) {
+            let tooltip = card.querySelector('.copy-tooltip')
+            if (!tooltip) {
+                tooltip = document.createElement('div')
+                tooltip.className = 'copy-tooltip'
+                card.appendChild(tooltip)
+            }
+            
+            tooltip.textContent = message
+            tooltip.style.top = '40px'
+            tooltip.style.left = '50%'
+            tooltip.style.transform = 'translateX(-50%)'
+            tooltip.classList.add('show')
+            
+            setTimeout(() => {
+                tooltip.classList.remove('show')
+            }, 1500)
         }
 
         // 全局鼠标事件监听器，用于框选功能
@@ -630,6 +819,7 @@
                 
                 const card = event.target.closest('.card')
                 if (card) {
+                    // 如果点击的是便签，不触发框选，允许便签内部交互
                     return
                 }
                 
@@ -640,13 +830,14 @@
 
         function handleBoardPointerDown(event) {
             if (isSelecting) {
+                // 如果正在框选，不触发便签拖动或调整大小
                 return
             }
 
             const card = event.target.closest('.card')
             if (!card || !board.contains(card)) return
 
-            const control = event.target.closest('.control, .edit-tool-btn')
+            const control = event.target.closest('.control, .edit-tool-btn, .resize-handle')
             const pointerType = event.pointerType || 'mouse'
             const isPrimaryPointer = event.isPrimary !== false
 
@@ -659,6 +850,11 @@
                 !state?.editing
             ) {
                 startDrag(event, card)
+                return
+            }
+
+            if (event.target.closest('.resize-handle')) {
+                startResize(event, card)
                 return
             }
 
@@ -709,13 +905,18 @@
             
             const selection = window.getSelection()
             const range = document.createRange()
-            range.selectNodeContents(element)
-            range.collapse(false)
+            if (element.textContent.trim()) {
+                range.selectNodeContents(element)
+            } else {
+                range.setStart(element, 0)
+                range.setEnd(element, 0)
+            }
             selection.removeAllRanges()
             selection.addRange(range)
             
             element.focus()
             
+            // 立即保存一次，以防用户不输入直接失焦
             await saveCardToSupabase(card);
 
             const handleInput = () => {
@@ -728,6 +929,8 @@
                 state.editing = false
                 element.removeEventListener('input', handleInput)
                 element.removeEventListener('blur', handleBlur)
+                // 确保失焦时也保存一次
+                saveCardToSupabase(card);
             }
 
             const handleKeyDown = (e) => {
@@ -745,6 +948,7 @@
                             selection.addRange(range)
                         }
                     } else {
+                        // 标题栏按 Enter 退出编辑
                         element.blur()
                     }
                 } else if (e.key === 'Escape') {
@@ -808,6 +1012,7 @@
             cards.forEach(card => {
                 const rect = card.getBoundingClientRect()
                 
+                // 检查便签是否与选择框重叠
                 if (!(rect.right < left || 
                       rect.left > left + width || 
                       rect.bottom < top || 
@@ -842,10 +1047,10 @@
         async function deleteSelectedCards() {
             if (selectedCards.size === 0) return
             
-            const count = selectedCards.size
-            for (const card of selectedCards) {
-                await closeCard(card)
-            }
+            // 使用 Promise.all 等待所有删除操作完成
+            const deletePromises = Array.from(selectedCards).map(card => closeCard(card));
+            await Promise.all(deletePromises);
+
             selectedCards.clear()
             deleteSelectedBtn.classList.remove('show')
         }
@@ -915,6 +1120,10 @@
             const state = cardStates.get(card);
             if (!state) return;
 
+            // 获取当前便签的实际高度，如果用户手动调整过，则保存调整后的高度
+            // 如果便签是自动撑开的，则保存 null，以便下次加载时仍自动撑开
+            const currentHeight = card.style.height === 'auto' ? null : card.offsetHeight;
+
             const cardData = {
                 title: card.querySelector('.card-title').innerText,
                 content: card.querySelector('.card-body').innerText,
@@ -923,6 +1132,8 @@
                 color: card.style.background,
                 angle: state.angle,
                 scale: state.scale,
+                width: card.offsetWidth,
+                height: currentHeight, // 保存当前计算或用户设置的高度
                 maximized: state.maximized,
                 currentColorIndex: state.currentColorIndex
             };
@@ -987,29 +1198,47 @@
                 return;
             }
 
-            // 清除默认创建的便签（如果存在）
-            board.innerHTML = '';
+            // 清除默认创建的便签（如果存在），只在首次加载时清空
+            // 避免在 Supabase 返回空数据时误删用户已有的便签
+            if (board.children.length > 0 && Array.from(board.children).every(child => cardStates.get(child)?.id === undefined)) {
+                board.innerHTML = '';
+            }
 
             // 创建便签卡片
             notes.forEach(cardData => {
                 const card = document.createElement('div');
                 card.className = 'card';
 
+                // 确保位置数据是有效的
+                const left = typeof cardData.left === 'number' ? cardData.left : 50;
+                const top = typeof cardData.top === 'number' ? cardData.top : 50;
+                
+                // 确保位置在视窗范围内
+                const safeLeft = clamp(left, 0, window.innerWidth - (cardData.width || 220));
+                const safeTop = clamp(top, 0, window.innerHeight - (cardData.height || 140));
+
                 card.style.background = cardData.color;
-                card.style.left = `${cardData.left}px`;
-                card.style.top = `${cardData.top}px`;
+                card.style.width = `${cardData.width || 220}px`;
+                // 如果 height 为 null，则让内容自动撑开
+                card.style.height = cardData.height ? `${cardData.height}px` : 'auto'; 
+                card.style.left = `${safeLeft}px`;
+                card.style.top = `${safeTop}px`;
                 card.style.zIndex = ++zIndexCursor;
 
                 card.innerHTML = `
                     <div class="card-header">
                         <div class="window-controls">
                             <button class="control close" type="button" aria-label="关闭"></button>
+                            <button class="control copy" type="button" aria-label="复制内容"></button>
                             <button class="control color-change" type="button" aria-label="改变颜色"></button>
                             <button class="control maximize" type="button" aria-label="最大化"></button>
                         </div>
-                        <div class="card-title">${cardData.title}</div>
+                        <div class="card-title" contenteditable="false">${cardData.title || ''}</div>
                     </div>
-                    <div class="card-body">${cardData.content}</div>
+                    <div class="card-body-container">
+                        <div class="card-body" contenteditable="false">${cardData.content || ''}</div>
+                        <div class="resize-handle"></div>
+                    </div>
                 `;
 
                 board.appendChild(card);
@@ -1018,15 +1247,18 @@
                     id: cardData.id, // 使用 Supabase 的 UUID
                     angle: cardData.angle || 0,
                     scale: cardData.scale || 1,
-                    left: cardData.left,
-                    top: cardData.top,
+                    left: safeLeft,
+                    top: safeTop,
                     maximized: cardData.maximized || false,
                     closing: false,
                     currentColorIndex: cardData.currentColorIndex || 0,
                     editing: false,
                     dragging: false,
+                    resizing: false,
                     dragOffsetX: 0,
-                    dragOffsetY: 0
+                    dragOffsetY: 0,
+                    width: cardData.width || 220,
+                    height: cardData.height || null // 存储加载的高度，null 表示自动
                 };
 
                 cardStates.set(card, state);
@@ -1042,6 +1274,68 @@
             });
         }
 
+        // 调整大小功能
+        function startResize(event, card) {
+            const state = cardStates.get(card)
+            if (!state || state.closing || state.maximized || isMobile) return
+
+            event.preventDefault()
+            event.stopPropagation()
+
+            card.classList.add('resizing')
+            state.resizing = true
+
+            const startX = event.clientX
+            const startY = event.clientY
+            const startWidth = card.offsetWidth
+            const startHeight = card.offsetHeight
+            // const startLeft = state.left; // 调整大小不改变位置
+            // const startTop = state.top;
+
+            let resizeFrame = null
+
+            const commitResize = async () => {
+                resizeFrame = null
+                // 更新 state 中的 width 和 height
+                state.width = card.offsetWidth
+                state.height = card.offsetHeight
+                await saveCardToSupabase(card)
+            }
+
+            const handlePointerMove = moveEvent => {
+                if (!state.resizing) return
+
+                const deltaX = moveEvent.clientX - startX
+                const deltaY = moveEvent.clientY - startY
+
+                const newWidth = Math.max(150, startWidth + deltaX) // 最小宽度
+                const newHeight = Math.max(100, startHeight + deltaY) // 最小高度
+
+                card.style.width = newWidth + 'px'
+                card.style.height = newHeight + 'px' // 明确设置高度，覆盖 auto
+
+                if (resizeFrame === null) {
+                    resizeFrame = requestAnimationFrame(commitResize)
+                }
+            }
+
+            const handlePointerUp = () => {
+                state.resizing = false
+                card.classList.remove('resizing')
+                if (resizeFrame !== null) {
+                    cancelAnimationFrame(resizeFrame)
+                    commitResize()
+                } else {
+                    // 如果没有移动，也提交一次，确保 state.width/height 更新
+                    commitResize();
+                }
+                document.removeEventListener('pointermove', handlePointerMove)
+                document.removeEventListener('pointerup', handlePointerUp)
+            }
+
+            document.addEventListener('pointermove', handlePointerMove)
+            document.addEventListener('pointerup', handlePointerUp)
+        }
 
         async function closeCard(card) {
             const state = cardStates.get(card)
@@ -1096,7 +1390,7 @@
                 scale: state.scale ?? 1,
                 angle: state.angle ?? 0,
                 width: card.offsetWidth,
-                height: card.offsetHeight,
+                height: card.offsetHeight, // 保存最大化前的高度
                 inlinePosition: card.style.position,
                 content: card.querySelector('.card-body').innerText,
                 title: card.querySelector('.card-title').innerText
@@ -1141,8 +1435,10 @@
                 <button class="edit-tool-btn" data-action="underline" title="下划线">U</button>
                 <button class="edit-tool-btn" data-action="wavy" title="波浪线">〜</button>
             `
-
-            title.parentNode.insertBefore(editTools, title.nextSibling)
+            // 确保 editTools 只添加一次
+            if (!title.parentNode.querySelector('.edit-tools')) {
+                title.parentNode.insertBefore(editTools, title.nextSibling)
+            }
             
             const autoSave = () => {
                 saveCardToSupabase(card); 
@@ -1172,18 +1468,21 @@
             const action = button.dataset.action
             const body = card.querySelector('.card-body')
             
+            // 确保在执行命令前 body 是焦点
+            body.focus();
+
             switch(action) {
                 case 'strikethrough':
                     document.execCommand('strikeThrough', false, null)
-                    button.classList.toggle('active')
+                    button.classList.toggle('active', body.style.textDecoration.includes('line-through'))
                     break
                 case 'underline':
                     document.execCommand('underline', false, null)
-                    button.classList.toggle('active')
+                    button.classList.toggle('active', body.style.textDecoration.includes('underline'))
                     break
                 case 'wavy':
                     body.classList.toggle('wavy')
-                    button.classList.toggle('active')
+                    button.classList.toggle('active', body.classList.contains('wavy'))
                     break
             }
             await saveCardToSupabase(card)
@@ -1198,13 +1497,15 @@
             card.style.left = `${previous.left}px`
             card.style.top = `${previous.top}px`
             card.style.width = `${previous.width}px`
-            card.style.height = `${previous.height}px`
+            card.style.height = previous.height ? `${previous.height}px` : 'auto' // 恢复之前的高度，或 auto
             card.style.borderRadius = '12px'
 
             state.left = previous.left
             state.top = previous.top
             state.scale = previous.scale ?? 1
             state.angle = previous.angle ?? state.angle ?? 0
+            state.width = previous.width
+            state.height = previous.height // 恢复之前的高度状态
             applyTransform(card, state)
             state.maximized = false
             if (activeMaximizedCard === card) {
@@ -1221,12 +1522,20 @@
             title.contentEditable = 'false'
             body.contentEditable = 'false'
 
+            // 清除最大化时的样式
             body.classList.remove('strikethrough', 'underline', 'wavy')
+            // 恢复文本装饰为默认值
+            body.style.textDecoration = '';
 
             setTimeout(() => {
                 if (!state.maximized) {
-                    card.style.width = ''
-                    card.style.height = ''
+                    // 确保在动画结束后，如果用户之前没有设置过高度，则恢复为 auto
+                    if (state.height === null) {
+                        card.style.height = 'auto';
+                    } else {
+                        card.style.height = `${state.height}px`;
+                    }
+                    card.style.width = `${state.width}px`
                     card.style.borderRadius = ''
                     if (previous.inlinePosition) {
                         card.style.position = previous.inlinePosition
@@ -1239,7 +1548,7 @@
         }
 
         async function startDrag(event, card) {
-            const control = event.target.closest('.control, .edit-tool-btn')
+            const control = event.target.closest('.control, .edit-tool-btn, .resize-handle')
             if (control) return
 
             const state = cardStates.get(card)
@@ -1260,10 +1569,11 @@
 
             const commitDrag = async () => {
                 dragFrame = null
-                const maxLeft = Math.max(window.innerWidth - card.offsetWidth, 0)
-                const maxTop = Math.max(window.innerHeight - card.offsetHeight, 0)
-                state.left = clamp(pendingLeft, -card.offsetWidth * 0.4, maxLeft)
-                state.top = clamp(pendingTop, -card.offsetHeight * 0.4, maxTop)
+                // 确保便签不会完全拖出屏幕
+                const maxLeft = window.innerWidth - card.offsetWidth
+                const maxTop = window.innerHeight - card.offsetHeight
+                state.left = clamp(pendingLeft, -card.offsetWidth * 0.4, maxLeft + card.offsetWidth * 0.4) // 允许部分拖出
+                state.top = clamp(pendingTop, -card.offsetHeight * 0.4, maxTop + card.offsetHeight * 0.4) // 允许部分拖出
                 card.style.left = `${state.left}px`
                 card.style.top = `${state.top}px`
                 
@@ -1286,6 +1596,9 @@
                 if (dragFrame !== null) {
                     cancelAnimationFrame(dragFrame)
                     commitDrag()
+                } else {
+                    // 如果没有移动，也提交一次，确保位置更新
+                    commitDrag();
                 }
                 document.removeEventListener('pointermove', handlePointerMove)
                 document.removeEventListener('pointerup', handlePointerUp)
@@ -1325,28 +1638,36 @@
             const angleRange = isMobile ? 6 : 10
             const angle = (Math.random() - 0.5) * angleRange
             const entryScale = isMobile ? 0.8 : 0.65
-            const cardWidth = isMobile ? 180 : 220
-            const cardHeight = isMobile ? 130 : 140
+            
+            // 随机选择一个初始尺寸
+            const randomDimension = randomFrom(initialCardDimensions);
+            const cardWidth = isMobile ? 180 : randomDimension.width;
+            // 初始高度设置为 auto，让内容撑开
+            const cardInitialHeight = isMobile ? 130 : randomDimension.height; 
+
             const horizontalMargin = isMobile ? 12 : 16
             const verticalMargin = isMobile ? 12 : 20
 
             let left, top
             if (x !== null && y !== null) {
+                // 如果是双击背景创建，位置在点击处附近
                 left = Math.min(Math.max(0, x - cardWidth / 2), window.innerWidth - cardWidth)
-                top = Math.min(Math.max(0, y - cardHeight / 2), window.innerHeight - cardHeight)
+                top = Math.min(Math.max(0, y - cardInitialHeight / 2), window.innerHeight - cardInitialHeight)
             } else {
+                // 否则随机位置
                 left = horizontalMargin +
                     Math.random() *
                         Math.max(window.innerWidth - cardWidth - horizontalMargin * 2, 0)
                 top = verticalMargin +
                     Math.random() *
-                        Math.max(window.innerHeight - cardHeight - verticalMargin * 2, 0)
+                        Math.max(window.innerHeight - cardInitialHeight - verticalMargin * 2, 0)
             }
 
             card.style.background = color
             card.style.left = `${left}px`
             card.style.top = `${top}px`
-            card.style.opacity = '0'
+            card.style.width = `${cardWidth}px`
+            card.style.height = 'auto'; // 默认高度为 auto，让内容撑开
             if (activeMaximizedCard && zIndexCursor >= MAXIMIZED_LAYER - 2) {
                 zIndexCursor = MAXIMIZED_LAYER - 2
             }
@@ -1356,12 +1677,16 @@
                 <div class="card-header">
                     <div class="window-controls">
                         <button class="control close" type="button" aria-label="关闭"></button>
+                        <button class="control copy" type="button" aria-label="复制内容"></button>
                         <button class="control color-change" type="button" aria-label="改变颜色"></button>
                         <button class="control maximize" type="button" aria-label="最大化"></button>
                     </div>
-                    <div class="card-title">温馨提示</div>
+                    <div class="card-title" contenteditable="false">${messageContent ? '温馨提示' : ''}</div>
                 </div>
-                <div class="card-body">${message}</div>
+                <div class="card-body-container">
+                    <div class="card-body" contenteditable="false">${message || ''}</div>
+                    <div class="resize-handle"></div>
+                </div>
             `
 
             const state = {
@@ -1373,7 +1698,9 @@
                 maximized: false,
                 closing: false,
                 currentColorIndex: colors.indexOf(color),
-                editing: false
+                editing: false,
+                width: cardWidth,
+                height: null // 初始高度为 null，表示自动
             }
 
             cardStates.set(card, state)
@@ -1390,15 +1717,19 @@
                 })
             })
 
+            // 限制便签数量
             while (board.children.length > maxCards) {
                 const oldest = board.firstElementChild
                 if (oldest && oldest !== card) {
                     const oldestState = cardStates.get(oldest)
+                    // 只有当便签不是最大化状态且不是正在关闭时才移除
                     if (!oldestState || (!oldestState.maximized && !oldestState.closing)) {
+                        // 注意：这里只是从DOM移除，并没有从Supabase删除
+                        // 如果需要从Supabase删除，需要调用 deleteCardFromSupabase(oldestState.id)
                         oldest.remove()
                         cardStates.delete(oldest)
                     } else {
-                        break
+                        break // 如果最旧的便签是最大化或正在关闭，则停止移除
                     }
                 } else {
                     break
@@ -1430,7 +1761,7 @@
                 isDarkMode = true
             } else {
                 document.body.classList.remove('dark-mode')
-                document.body.classList.add('light-mode')
+                document.classList.add('light-mode')
                 themeToggleButton.innerHTML = '🌙'
                 themeToggleButton.setAttribute('aria-label', '切换到暗色模式')
                 isDarkMode = false
