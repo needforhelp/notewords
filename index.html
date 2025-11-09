@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>便签墙</title>
+    <!-- 引入 Supabase 客户端库 -->
+    <script src="https://unpkg.com/@supabase/supabase-js"></script>
+    <style>
+        /* CSS Variables for theming */
+        :root {
+            /* Light Mode Variables */
+            --body-bg-color-light: #ffffff;
+            --bg-color-light: linear-gradient(0deg, #eee 1px, transparent 0),
+                linear-gradient(90deg, #eee 1px, transparent 0);
+            --bg-size-light: 30px 30px;
+            --text-color-light: #333;
+            --card-border-color-light: rgba(0, 0, 0, 0.08);
+            --card-shadow-color-light: rgba(0, 0, 0, 0.2);
+            --card-header-bg-light: rgba(255, 255, 255, 0.7);
+            --control-border-color-light: rgba(0, 0, 0, 0.08);
+            --control-bg-color-light: #ccc;
+            --card-title-color-light: #000000;
+            --card-body-color-light: rgba(0, 0, 0, 0.72);
+            --grid-line-color-light: #eee;
+            --edit-tool-text-color-light: #000000;
+
+            /* Dark Mode Variables */
+            --body-bg-color-dark: #1a1a1a;
+            --bg-color-dark: linear-gradient(0deg, #333 1px, transparent 0),
+                linear-gradient(90deg, #333 1px, transparent 0);
+            --bg-size-dark: 30px 30px;
+            --text-color-dark: #eee;
+            --card-border-color-dark: rgba(255, 255, 255, 0.15);
+            --card-shadow-color-dark: rgba(0, 0, 0, 0.5);
+            --card-header-bg-dark: rgba(166, 166, 166, 0.4);
+            --control-border-color-dark: rgba(255, 255, 255, 0.2);
+            --control-bg-color-dark: #555;
+            --card-title-color-dark: #000000;
+            --card-body-color-dark: rgba(125, 125, 125, 0.85);
+            --grid-line-color-dark: #333;
+            --edit-tool-text-color-dark: #000000;
+
+            /* Default to dark mode variables */
+            --body-bg-color: var(--body-bg-color-dark);
+            --bg-image: var(--bg-color-dark);
+            --bg-size: var(--bg-size-dark);
+            --text-color: var(--text-color-dark);
+            --card-border-color: var(--card-border-color-dark);
+            --card-shadow-color: var(--card-shadow-color-dark);
+            --card-header-bg: var(--card-header-bg-dark);
+            --control-border-color: var(--control-border-color-dark);
+            --control-bg-color: var(--control-bg-color-dark);
+            --card-title-color: var(--card-title-color-dark);
+            --card-body-color: var(--card-body-color-dark);
+            --grid-line-color: var(--grid-line-color-dark);
+            --edit-tool-text-color: var(--edit-tool-text-color-dark);
+        }
+
+        /* Override variables for light mode */
+        body.light-mode {
+            --body-bg-color: var(--body-bg-color-light);
+            --bg-image: var(--bg-color-light);
+            --bg-size: var(--bg-size-light);
+            --text-color: var(--text-color-light);
+            --card-border-color: var(--card-border-color-light);
+            --card-shadow-color: var(--card-shadow-color-light);
+            --card-header-bg: var(--card-header-bg-light);
+            --control-border-color: var(--control-border-color-light);
+            --control-bg-color: var(--control-bg-color-light);
+            --card-title-color: var(--card-title-color-light);
+            --card-body-color: var(--card-body-color-light);
+            --grid-line-color: var(--grid-line-color-light);
+            --edit-tool-text-color: var(--edit-tool-text-color-light);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--body-bg-color);
+            background-image: linear-gradient(0deg, var(--grid-line-color) 1px, transparent 0),
+                linear-gradient(90deg, var(--grid-line-color) 1px, transparent 0);
+            background-size: var(--bg-size);
+            color: var(--text-color);
+            min-height: 100dvh;
+            overflow: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease, background-image 0.3s ease;
+        }
+
+        body.has-maximized-card {
+            overflow: hidden;
+        }
+
+        body.is-mobile {
+            overflow-y: auto;
+        }
+
+        #board {
+            position: relative;
+            width: 100vw;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        body.is-mobile #board {
+            height: auto;
+            min-height: 100dvh;
+        }
+
+        .card {
+            position: absolute;
+            width: 220px;
+            border-radius: 12px;
+            box-shadow: 0 16px 35px var(--card-shadow-color);
+            background: #fff;
+            border: 1px solid var(--card-border-color);
+            overflow: hidden;
+            opacity: 0;
+            transform-origin: center;
+            transition: transform 0.35s ease, opacity 0.35s ease, left 0.35s ease,
+                top 0.35s ease, width 0.35s ease, height 0.35s ease,
+                border-radius 0.35s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            cursor: move;
+        }
+
+        .card.dragging {
+            transition: none;
+            box-shadow: 0 22px 45px rgba(0, 0, 0, 0.35);
+        }
+
+        .card.editing {
+            cursor: text !important;
+        }
+
+        .card.maximized {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            border-radius: 0;
+            box-shadow: 0 28px 60px rgba(0, 0, 0, 0.4);
+            cursor: auto;
+        }
+
+        .card.selected {
+            border: 2px solid #007acc !important;
+            box-shadow: 0 0 20px rgba(0, 122, 204, 0.5) !important;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--card-header-bg);
+            cursor: move;
+            user-select: none;
+            touch-action: pan-y;
+            transition: background 0.3s ease;
+        }
+
+        .card.editing .card-header {
+            cursor: text !important;
+        }
+
+        .card-header.dragging {
+            cursor: grabbing;
+        }
+
+        .window-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .window-controls .control {
+            position: relative;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid var(--control-border-color);
+            background: var(--control-bg-color);
+            cursor: pointer;
+            outline: none;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        .window-controls .control.close {
+            background: #ff5f57;
+            border-color: #e0443e;
+        }
+
+        .window-controls .control.maximize {
+            background: #28c840;
+            border-color: #1aab2c;
+        }
+
+        .window-controls .control.color-change {
+            background: #febb2e;
+            border-color: #dea123;
+        }
+
+        .window-controls .control::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .card-header:hover .window-controls .control::after {
+            opacity: 0.8;
+        }
+
+        .window-controls .control.close::after {
+            content: '×';
+            width: auto;
+            height: auto;
+            background: none;
+            font-size: 10px;
+            line-height: 1;
+            font-weight: 700;
+            color: rgba(0, 0, 0, 0.7);
+        }
+
+        .window-controls .control.maximize::after {
+            width: 6px;
+            height: 6px;
+            background: linear-gradient(
+                45deg,
+                rgba(0, 0, 0, 0.6) 0%,
+                rgba(0, 0, 0, 0.6) 45%,
+                transparent 45%,
+                transparent 55%,
+                rgba(0, 0, 0, 0.6) 55%,
+                rgba(0, 0, 0, 0.6) 100%
+            );
+        }
+
+        .window-controls .control.color-change::after {
+            content: '🎨';
+            font-size: 8px;
+            line-height: 1;
+            color: rgba(0, 0, 0, 0.7);
+        }
+
+        .card-title {
+            font-size: 17px;  /* 增大字号 */
+            font-weight: 600;
+            color: var(--card-title-color);
+            padding-left: 10px;
+            flex: 1;
+            transition: color 0.3s ease;
+            user-select: text;
+        }
+
+        .card.maximized .card-title {
+            display: inline-block;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: text;
+            transition: all 0.2s ease;
+        }
+
+        .card.maximized .card-title:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card.maximized .card-title:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .card-body {
+            padding: 16px;
+            font-size: 16px;
+            line-height: 1.4;
+            font-weight: 600;
+            color: var(--card-body-color);
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            white-space: normal;
+            transition: color 0.3s ease;
+            user-select: text;
+        }
+
+        .card.maximized .card-body {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            padding: clamp(32px, min(10vw, 10vh), 128px);
+            padding-top: clamp(72px, min(14vw, 14vh), 192px);
+            font-size: clamp(48px, min(18vw, 18vh), 200px);
+            line-height: 1.2;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            outline: none;
+            cursor: text;
+            content-editable: true;
+        }
+
+        .edit-tools {
+            display: none;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .card.maximized .edit-tools {
+            display: flex;
+        }
+
+        .edit-tool-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: var(--edit-tool-text-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .edit-tool-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .edit-tool-btn.active {
+            background: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .card-body.strikethrough {
+            text-decoration: line-through;
+        }
+
+        .card-body.underline {
+            text-decoration: underline;
+        }
+
+        .card-body.wavy {
+            text-decoration: underline;
+            text-decoration-style: wavy;
+            text-decoration-color: #ff6b6b;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                width: 180px;
+                border-radius: 10px;
+            }
+
+            .card-body {
+                padding: 14px;
+                font-size: 14px;
+            }
+
+            .card-title {
+                font-size: 14px;  /* 移动端也增大字号 */
+            }
+        }
+
+        #theme-toggle {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            background: var(--card-header-bg);
+            border: 1px solid var(--card-border-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: move;
+            z-index: 1000001;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+            color: var(--text-color);
+            touch-action: none;
+            user-select: none;
+        }
+
+        #theme-toggle:hover {
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        #theme-toggle:active {
+            transform: translateY(1px);
+        }
+
+        #theme-toggle.dragging {
+            transition: none;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            z-index: 1000002;
+        }
+
+        .card.editing .card-body {
+            cursor: text;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .card.editing .card-title {
+            cursor: text;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        /* 框选相关样式 */
+        .selection-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 999999;
+            pointer-events: none;
+        }
+
+        .selection-box {
+            position: absolute;
+            border: 2px dashed #007acc;
+            background: rgba(0, 122, 204, 0.1);
+            pointer-events: none;
+        }
+
+        .delete-selected-btn {
+            position: fixed;
+            bottom: 60px;
+            right: 15px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 1000000;
+            display: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .delete-selected-btn:hover {
+            background: #ff6666;
+            transform: translateY(-2px);
+        }
+
+        .delete-selected-btn.show {
+            display: block;
+        }
+
+        .selection-mode-hint {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000001;
+            display: none;
+        }
+
+        .selection-mode-hint.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="board"></div>
+    <button id="theme-toggle" aria-label="切换主题"></button>
+    <div class="selection-overlay" id="selectionOverlay"></div>
+    <button class="delete-selected-btn" id="deleteSelectedBtn">删除选中的便签</button>
+    <div class="selection-mode-hint" id="selectionHint">按住Ctrl并拖动鼠标框选便签进行批量删除</div>
+
+    <script>
+        // --- Supabase 初始化 ---
+        const SUPABASE_URL = 'https://wketotdrvgmijhywfqbv.supabase.co'; // <--- 在这里替换
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZXRvdGRydmdtaWpoeXdmcWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2NDk4NjksImV4cCI6MjA3ODIyNTg2OX0.P5lXhdebBpNOO3sjGCiALqD4xpzL1dKOKa7-9uYJQzg'; // <--- 在这里替换
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const board = document.getElementById('board')
+        const themeToggleButton = document.getElementById('theme-toggle')
+        const selectionOverlay = document.getElementById('selectionOverlay')
+        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn')
+        const selectionHint = document.getElementById('selectionHint')
+
+        const messages = [
+            '双击背景新建便签',
+            '右键点击便签文字可直接编辑',
+            '双击便签标题栏可全屏编辑',
+            'ctrl＋框选进行批量删除',
+        ]
+
+        const colors = [
+            '#ffe0e3',
+            '#c7f0ff',
+            '#ffd8a8',
+            '#d9f2d9',
+            '#e5d7ff',
+            '#f9f7d9',
+            '#d2f0f8',
+            '#ffd4f5'
+        ]
+
+        const cardStates = new WeakMap()
+        const MAXIMIZED_LAYER = 1000000
+        let activeMaximizedCard = null
+        const pointerMediaQuery = window.matchMedia('(pointer: coarse)')
+        let isMobile =
+            pointerMediaQuery.matches || window.innerWidth <= 768
+        let maxCards = isMobile ? 120 : 180
+        let zIndexCursor = 200
+        let currentMessageIndex = 0;
+
+        // 框选相关状态
+        let isSelecting = false
+        let selectionStartX = 0
+        let selectionStartY = 0
+        let selectionBox = null
+        let selectedCards = new Set()
+
+        // 主题按钮拖动相关状态
+        let themeButtonDragging = false;
+        let themeButtonOffsetX = 0;
+        let themeButtonOffsetY = 0;
+        let themeButtonStartX = 0;
+        let themeButtonStartY = 0;
+        let themeButtonHasMoved = false;
+
+        document.body.classList.toggle('is-mobile', isMobile)
+
+        function randomFrom(array) {
+            return array[Math.floor(Math.random() * array.length)]
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max)
+        }
+
+        function applyTransform(card, state) {
+            const scale = state.scale ?? 1
+            const angle = state.angle ?? 0
+            card.style.transform = `scale(${scale}) rotate(${angle}deg)`
+        }
+
+        function bringToFront(card) {
+            if (card === activeMaximizedCard) {
+                card.style.zIndex = MAXIMIZED_LAYER
+                return
+            }
+
+            zIndexCursor += 1
+            if (activeMaximizedCard && zIndexCursor >= MAXIMIZED_LAYER) {
+                zIndexCursor = MAXIMIZED_LAYER - 1
+            }
+
+            card.style.zIndex = zIndexCursor
+        }
+
+        function updateBodyMaximizedState() {
+            document.body.classList.toggle(
+                'has-maximized-card',
+                Boolean(activeMaximizedCard)
+            )
+        }
+
+        function syncMobileMode() {
+            const nextIsMobile =
+                pointerMediaQuery.matches || window.innerWidth <= 768
+            if (nextIsMobile === isMobile) return
+
+            isMobile = nextIsMobile
+            maxCards = isMobile ? 120 : 180
+            document.body.classList.toggle('is-mobile', isMobile)
+        }
+
+        function handleBoardClick(event) {
+            const control = event.target.closest('.control, .edit-tool-btn')
+            if (!control) return
+
+            const card = control.closest('.card')
+            if (!card || !board.contains(card)) return
+
+            event.preventDefault()
+
+            if (control.classList.contains('close')) {
+                closeCard(card)
+            } else if (control.classList.contains('maximize')) {
+                toggleMaximize(card)
+            } else if (control.classList.contains('color-change')) {
+                cycleCardColor(card)
+            } else if (control.classList.contains('edit-tool-btn')) {
+                handleEditToolClick(control, card)
+            }
+        }
+
+        // 全局鼠标事件监听器，用于框选功能
+        function handleGlobalPointerDown(event) {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault()
+                event.stopPropagation()
+                
+                const card = event.target.closest('.card')
+                if (card) {
+                    return
+                }
+                
+                startSelection(event)
+                return
+            }
+        }
+
+        function handleBoardPointerDown(event) {
+            if (isSelecting) {
+                return
+            }
+
+            const card = event.target.closest('.card')
+            if (!card || !board.contains(card)) return
+
+            const control = event.target.closest('.control, .edit-tool-btn')
+            const pointerType = event.pointerType || 'mouse'
+            const isPrimaryPointer = event.isPrimary !== false
+
+            const state = cardStates.get(card)
+            
+            if (
+                !control &&
+                pointerType !== 'touch' &&
+                isPrimaryPointer &&
+                !state?.editing
+            ) {
+                startDrag(event, card)
+                return
+            }
+
+            bringToFront(card)
+        }
+
+        function handleBoardDoubleClick(event) {
+            const header = event.target.closest('.card-header')
+            if (!header || event.target.closest('.control, .edit-tool-btn')) return
+
+            const card = header.closest('.card')
+            if (!card || !board.contains(card)) return
+
+            toggleMaximize(card)
+        }
+
+        function handleBoardBackgroundDoubleClick(event) {
+            if (event.target === board) {
+                createCard(null, event.clientX, event.clientY)
+            }
+        }
+
+        function handleContextMenu(event) {
+            const card = event.target.closest('.card')
+            if (!card || !board.contains(card)) return
+
+            const state = cardStates.get(card)
+            if (!state || state.closing || state.maximized) return
+
+            const bodyElement = card.querySelector('.card-body')
+            const titleElement = card.querySelector('.card-title')
+
+            if (event.target === bodyElement || event.target === titleElement) {
+                event.preventDefault()
+                enableInlineEdit(card, event.target)
+            }
+        }
+
+        async function enableInlineEdit(card, element) {
+            const state = cardStates.get(card)
+            if (!state) return
+
+            state.editing = true
+            card.classList.add('editing')
+            
+            element.contentEditable = 'true'
+            element.spellcheck = false
+            
+            const selection = window.getSelection()
+            const range = document.createRange()
+            range.selectNodeContents(element)
+            range.collapse(false)
+            selection.removeAllRanges()
+            selection.addRange(range)
+            
+            element.focus()
+            
+            await saveCardToSupabase(card);
+
+            const handleInput = () => {
+                saveCardToSupabase(card);
+            }
+
+            const handleBlur = () => {
+                element.contentEditable = 'false'
+                card.classList.remove('editing')
+                state.editing = false
+                element.removeEventListener('input', handleInput)
+                element.removeEventListener('blur', handleBlur)
+            }
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    if (element.classList.contains('card-body')) {
+                        e.preventDefault()
+                        const selection = window.getSelection()
+                        if (selection.rangeCount > 0) {
+                            const range = selection.getRangeAt(0)
+                            const br = document.createElement('br')
+                            range.insertNode(br)
+                            range.setStartAfter(br)
+                            range.collapse(true)
+                            selection.removeAllRanges()
+                            selection.addRange(range)
+                        }
+                    } else {
+                        element.blur()
+                    }
+                } else if (e.key === 'Escape') {
+                    element.blur()
+                }
+            }
+
+            element.addEventListener('input', handleInput)
+            element.addEventListener('blur', handleBlur)
+            element.addEventListener('keydown', handleKeyDown)
+        }
+
+        // 框选功能
+        function startSelection(event) {
+            isSelecting = true
+            selectionStartX = event.clientX
+            selectionStartY = event.clientY
+            
+            selectionBox = document.createElement('div')
+            selectionBox.className = 'selection-box'
+            selectionBox.style.left = selectionStartX + 'px'
+            selectionBox.style.top = selectionStartY + 'px'
+            selectionBox.style.width = '0px'
+            selectionBox.style.height = '0px'
+            selectionOverlay.appendChild(selectionBox)
+            
+            selectionHint.classList.add('show')
+            
+            document.addEventListener('pointermove', handleSelectionMove)
+            document.addEventListener('pointerup', endSelection)
+            
+            event.preventDefault()
+        }
+
+        function handleSelectionMove(event) {
+            if (!isSelecting || !selectionBox) return
+            
+            const currentX = event.clientX
+            const currentY = event.clientY
+            
+            const left = Math.min(selectionStartX, currentX)
+            const top = Math.min(selectionStartY, currentY)
+            const width = Math.abs(currentX - selectionStartX)
+            const height = Math.abs(currentY - selectionStartY)
+            
+            selectionBox.style.left = left + 'px'
+            selectionBox.style.top = top + 'px'
+            selectionBox.style.width = width + 'px'
+            selectionBox.style.height = height + 'px'
+            
+            updateSelectedCards(left, top, width, height)
+        }
+
+        function updateSelectedCards(left, top, width, height) {
+            document.querySelectorAll('.card.selected').forEach(card => {
+                card.classList.remove('selected')
+            })
+            selectedCards.clear()
+            
+            const cards = document.querySelectorAll('.card')
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect()
+                
+                if (!(rect.right < left || 
+                      rect.left > left + width || 
+                      rect.bottom < top || 
+                      rect.top > top + height)) {
+                    card.classList.add('selected')
+                    selectedCards.add(card)
+                }
+            })
+            
+            if (selectedCards.size > 0) {
+                deleteSelectedBtn.classList.add('show')
+                deleteSelectedBtn.textContent = `删除选中的便签 (${selectedCards.size})`
+            } else {
+                deleteSelectedBtn.classList.remove('show')
+            }
+        }
+
+        function endSelection() {
+            isSelecting = false
+            
+            if (selectionBox) {
+                selectionBox.remove()
+                selectionBox = null
+            }
+            
+            selectionHint.classList.remove('show')
+            
+            document.removeEventListener('pointermove', handleSelectionMove)
+            document.removeEventListener('pointerup', endSelection)
+        }
+
+        async function deleteSelectedCards() {
+            if (selectedCards.size === 0) return
+            
+            const count = selectedCards.size
+            for (const card of selectedCards) {
+                await closeCard(card)
+            }
+            selectedCards.clear()
+            deleteSelectedBtn.classList.remove('show')
+        }
+
+        // 主题按钮拖动处理
+        function handleThemeButtonPointerDown(event) {
+            if (event.target === themeToggleButton) {
+                event.preventDefault()
+                themeButtonDragging = true
+                themeButtonHasMoved = false
+                themeButtonStartX = event.clientX
+                themeButtonStartY = event.clientY
+                themeButtonOffsetX = event.clientX - themeToggleButton.offsetLeft
+                themeButtonOffsetY = event.clientY - themeToggleButton.offsetTop
+                themeToggleButton.classList.add('dragging')
+            }
+        }
+
+        function handleThemeButtonPointerMove(event) {
+            if (!themeButtonDragging) return
+
+            const deltaX = Math.abs(event.clientX - themeButtonStartX)
+            const deltaY = Math.abs(event.clientY - themeButtonStartY)
+            
+            if (deltaX > 5 || deltaY > 5) {
+                themeButtonHasMoved = true
+            }
+
+            const newX = event.clientX - themeButtonOffsetX
+            const newY = event.clientY - themeButtonOffsetY
+
+            const maxX = window.innerWidth - themeToggleButton.offsetWidth
+            const maxY = window.innerHeight - themeToggleButton.offsetHeight
+
+            themeToggleButton.style.left = clamp(newX, 0, maxX) + 'px'
+            themeToggleButton.style.top = clamp(newY, 0, maxY) + 'px'
+            themeToggleButton.style.right = 'auto'
+            themeToggleButton.style.bottom = 'auto'
+        }
+
+        function handleThemeButtonPointerUp() {
+            if (!themeButtonDragging) return
+
+            themeButtonDragging = false
+            themeToggleButton.classList.remove('dragging')
+        }
+
+        board.addEventListener('click', handleBoardClick)
+        board.addEventListener('pointerdown', handleBoardPointerDown)
+        board.addEventListener('dblclick', handleBoardDoubleClick)
+        board.addEventListener('dblclick', handleBoardBackgroundDoubleClick)
+        board.addEventListener('contextmenu', handleContextMenu)
+
+        themeToggleButton.addEventListener('pointerdown', handleThemeButtonPointerDown)
+        document.addEventListener('pointermove', handleThemeButtonPointerMove)
+        document.addEventListener('pointerup', handleThemeButtonPointerUp)
+
+        deleteSelectedBtn.addEventListener('click', deleteSelectedCards)
+
+        // --- Supabase 数据操作函数 ---
+
+        /**
+         * 保存或更新便签到 Supabase (Upsert)
+         * @param {HTMLElement} card - 要保存的便签 DOM 元素
+         */
+        async function saveCardToSupabase(card) {
+            const state = cardStates.get(card);
+            if (!state) return;
+
+            const cardData = {
+                title: card.querySelector('.card-title').innerText,
+                content: card.querySelector('.card-body').innerText,
+                left: state.left,
+                top: state.top,
+                color: card.style.background,
+                angle: state.angle,
+                scale: state.scale,
+                maximized: state.maximized,
+                currentColorIndex: state.currentColorIndex
+            };
+
+            try {
+                let { data, error } = {};
+                if (!state.id) { // 新卡片，执行插入
+                    const res = await supabase.from('notes').insert(cardData).select();
+                    data = res.data;
+                    error = res.error;
+                    if (data && data.length > 0) {
+                        state.id = data[0].id; // 更新为数据库返回的 UUID
+                    }
+                } else { // 现有卡片，执行更新
+                    const res = await supabase.from('notes').update(cardData).eq('id', state.id).select();
+                    data = res.data;
+                    error = res.error;
+                }
+                
+                if (error) {
+                    console.error('保存便签时出错:', error);
+                }
+            } catch (err) {
+                console.error('请求失败:', err);
+            }
+        }
+
+        /**
+         * 从 Supabase 删除便签
+         * @param {string} cardId - 要删除的便签的 ID
+         */
+        async function deleteCardFromSupabase(cardId) {
+            if (!cardId) return;
+            
+            const { error } = await supabase.from('notes').delete().eq('id', cardId);
+            if (error) {
+                console.error('删除便签时出错:', error);
+            }
+        }
+
+        /**
+         * 从 Supabase 加载所有便签
+         */
+        async function loadCardsFromSupabase() {
+            const { data: notes, error } = await supabase.from('notes').select('*');
+            
+            if (error) {
+                console.error('加载便签时出错:', error);
+                // 如果出错，回退到创建默认便签
+                for (let i = 0; i < messages.length; i++) {
+                    setTimeout(() => createCard(messages[i]), i * 40);
+                }
+                return;
+            }
+
+            if (!notes || notes.length === 0) {
+                // 如果没有便签，创建默认的
+                for (let i = 0; i < messages.length; i++) {
+                    setTimeout(() => createCard(messages[i]), i * 40);
+                }
+                currentMessageIndex = messages.length % messages.length;
+                return;
+            }
+
+            // 清除默认创建的便签（如果存在）
+            board.innerHTML = '';
+
+            // 创建便签卡片
+            notes.forEach(cardData => {
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                card.style.background = cardData.color;
+                card.style.left = `${cardData.left}px`;
+                card.style.top = `${cardData.top}px`;
+                card.style.zIndex = ++zIndexCursor;
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <div class="window-controls">
+                            <button class="control close" type="button" aria-label="关闭"></button>
+                            <button class="control color-change" type="button" aria-label="改变颜色"></button>
+                            <button class="control maximize" type="button" aria-label="最大化"></button>
+                        </div>
+                        <div class="card-title">${cardData.title}</div>
+                    </div>
+                    <div class="card-body">${cardData.content}</div>
+                `;
+
+                board.appendChild(card);
+
+                const state = {
+                    id: cardData.id, // 使用 Supabase 的 UUID
+                    angle: cardData.angle || 0,
+                    scale: cardData.scale || 1,
+                    left: cardData.left,
+                    top: cardData.top,
+                    maximized: cardData.maximized || false,
+                    closing: false,
+                    currentColorIndex: cardData.currentColorIndex || 0,
+                    editing: false,
+                    dragging: false,
+                    dragOffsetX: 0,
+                    dragOffsetY: 0
+                };
+
+                cardStates.set(card, state);
+                applyTransform(card, state);
+
+                // 显示动画
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        card.style.opacity = '1';
+                        card.style.cursor = 'move';
+                    });
+                });
+            });
+        }
+
+
+        async function closeCard(card) {
+            const state = cardStates.get(card)
+            if (!state || state.closing) return
+            if (card === activeMaximizedCard) {
+                activeMaximizedCard = null
+                updateBodyMaximizedState()
+            }
+            state.closing = true
+            state.scale = 0.1
+            card.style.opacity = '0'
+            applyTransform(card, state)
+
+            // 从 Supabase 删除
+            if (state.id) {
+                await deleteCardFromSupabase(state.id)
+            }
+
+            const handleTransitionEnd = event => {
+                if (event.propertyName === 'opacity') {
+                    card.removeEventListener('transitionend', handleTransitionEnd)
+                    card.remove()
+                    cardStates.delete(card)
+                }
+            }
+
+            card.addEventListener('transitionend', handleTransitionEnd)
+        }
+
+        async function toggleMaximize(card) {
+            const state = cardStates.get(card)
+            if (!state || state.closing) return
+
+            if (state.maximized) {
+                restoreFromMaximize(card, state)
+            } else {
+                await maximizeCard(card, state)
+            }
+        }
+
+        async function maximizeCard(card, state) {
+            if (activeMaximizedCard && activeMaximizedCard !== card) {
+                const activeState = cardStates.get(activeMaximizedCard)
+                if (activeState) {
+                    restoreFromMaximize(activeMaximizedCard, activeState)
+                }
+            }
+
+            state.beforeMaximize = {
+                left: state.left,
+                top: state.top,
+                scale: state.scale ?? 1,
+                angle: state.angle ?? 0,
+                width: card.offsetWidth,
+                height: card.offsetHeight,
+                inlinePosition: card.style.position,
+                content: card.querySelector('.card-body').innerText,
+                title: card.querySelector('.card-title').innerText
+            }
+
+            card.classList.add('maximized')
+            card.style.position = 'fixed'
+            card.style.left = '0px'
+            card.style.top = '0px'
+            card.style.width = '100vw'
+            card.style.height = '100dvh'
+            card.style.borderRadius = '0'
+
+            state.left = 0
+            state.top = 0
+            state.scale = 1
+            state.angle = 0
+            applyTransform(card, state)
+            activeMaximizedCard = card
+            bringToFront(card)
+            state.maximized = true
+            updateBodyMaximizedState()
+
+            await saveCardToSupabase(card);
+            setupEditMode(card)
+        }
+
+        function setupEditMode(card) {
+            const title = card.querySelector('.card-title')
+            const body = card.querySelector('.card-body')
+
+            title.contentEditable = 'true'
+            title.spellcheck = false
+
+            body.contentEditable = 'true'
+            body.spellcheck = false
+
+            const editTools = document.createElement('div')
+            editTools.className = 'edit-tools'
+            editTools.innerHTML = `
+                <button class="edit-tool-btn" data-action="strikethrough" title="删除线">S</button>
+                <button class="edit-tool-btn" data-action="underline" title="下划线">U</button>
+                <button class="edit-tool-btn" data-action="wavy" title="波浪线">〜</button>
+            `
+
+            title.parentNode.insertBefore(editTools, title.nextSibling)
+            
+            const autoSave = () => {
+                saveCardToSupabase(card); 
+            }
+
+            title.addEventListener('input', autoSave)
+            body.addEventListener('input', autoSave)
+
+            body.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    const selection = window.getSelection()
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0)
+                        const br = document.createElement('br')
+                        range.insertNode(br)
+                        range.setStartAfter(br)
+                        range.collapse(true)
+                        selection.removeAllRanges()
+                        selection.addRange(range)
+                    }
+                }
+            })
+        }
+
+        async function handleEditToolClick(button, card) {
+            const action = button.dataset.action
+            const body = card.querySelector('.card-body')
+            
+            switch(action) {
+                case 'strikethrough':
+                    document.execCommand('strikeThrough', false, null)
+                    button.classList.toggle('active')
+                    break
+                case 'underline':
+                    document.execCommand('underline', false, null)
+                    button.classList.toggle('active')
+                    break
+                case 'wavy':
+                    body.classList.toggle('wavy')
+                    button.classList.toggle('active')
+                    break
+            }
+            await saveCardToSupabase(card)
+        }
+
+        function restoreFromMaximize(card, state) {
+            const previous = state.beforeMaximize
+            if (!previous) return
+
+            card.classList.remove('maximized')
+            card.style.position = previous.inlinePosition || 'absolute'
+            card.style.left = `${previous.left}px`
+            card.style.top = `${previous.top}px`
+            card.style.width = `${previous.width}px`
+            card.style.height = `${previous.height}px`
+            card.style.borderRadius = '12px'
+
+            state.left = previous.left
+            state.top = previous.top
+            state.scale = previous.scale ?? 1
+            state.angle = previous.angle ?? state.angle ?? 0
+            applyTransform(card, state)
+            state.maximized = false
+            if (activeMaximizedCard === card) {
+                activeMaximizedCard = null
+                updateBodyMaximizedState()
+            }
+            bringToFront(card)
+
+            const editTools = card.querySelector('.edit-tools')
+            if (editTools) editTools.remove()
+
+            const title = card.querySelector('.card-title')
+            const body = card.querySelector('.card-body')
+            title.contentEditable = 'false'
+            body.contentEditable = 'false'
+
+            body.classList.remove('strikethrough', 'underline', 'wavy')
+
+            setTimeout(() => {
+                if (!state.maximized) {
+                    card.style.width = ''
+                    card.style.height = ''
+                    card.style.borderRadius = ''
+                    if (previous.inlinePosition) {
+                        card.style.position = previous.inlinePosition
+                    } else {
+                        card.style.position = ''
+                    }
+                    state.beforeMaximize = null
+                }
+            }, 360)
+        }
+
+        async function startDrag(event, card) {
+            const control = event.target.closest('.control, .edit-tool-btn')
+            if (control) return
+
+            const state = cardStates.get(card)
+            if (!state || state.closing || state.maximized || state.editing) return
+
+            event.preventDefault()
+            bringToFront(card)
+
+            card.classList.add('dragging')
+
+            state.dragging = true
+            state.dragOffsetX = event.clientX - state.left
+            state.dragOffsetY = event.clientY - state.top
+
+            let dragFrame = null
+            let pendingLeft = state.left
+            let pendingTop = state.top
+
+            const commitDrag = async () => {
+                dragFrame = null
+                const maxLeft = Math.max(window.innerWidth - card.offsetWidth, 0)
+                const maxTop = Math.max(window.innerHeight - card.offsetHeight, 0)
+                state.left = clamp(pendingLeft, -card.offsetWidth * 0.4, maxLeft)
+                state.top = clamp(pendingTop, -card.offsetHeight * 0.4, maxTop)
+                card.style.left = `${state.left}px`
+                card.style.top = `${state.top}px`
+                
+                await saveCardToSupabase(card)
+            }
+
+            const handlePointerMove = moveEvent => {
+                if (!state.dragging) return
+
+                pendingLeft = moveEvent.clientX - state.dragOffsetX
+                pendingTop = moveEvent.clientY - state.dragOffsetY
+                if (dragFrame === null) {
+                    dragFrame = requestAnimationFrame(commitDrag)
+                }
+            }
+
+            const handlePointerUp = () => {
+                state.dragging = false
+                card.classList.remove('dragging')
+                if (dragFrame !== null) {
+                    cancelAnimationFrame(dragFrame)
+                    commitDrag()
+                }
+                document.removeEventListener('pointermove', handlePointerMove)
+                document.removeEventListener('pointerup', handlePointerUp)
+            }
+
+            document.addEventListener('pointermove', handlePointerMove)
+            document.addEventListener('pointerup', handlePointerUp)
+        }
+
+        async function cycleCardColor(card) {
+            const state = cardStates.get(card)
+            if (!state || state.closing) return
+
+            let currentIndex = state.currentColorIndex !== undefined ? state.currentColorIndex : -1
+            const nextIndex = (currentIndex + 1) % colors.length
+            const newColor = colors[nextIndex]
+
+            card.style.background = newColor
+            state.currentColorIndex = nextIndex
+            
+            await saveCardToSupabase(card)
+        }
+
+        async function createCard(messageContent = null, x = null, y = null) {
+            const message = messageContent !== null
+                ? messageContent
+                : messages[currentMessageIndex]
+
+            if (messageContent === null) {
+                currentMessageIndex = (currentMessageIndex + 1) % messages.length
+            }
+
+            const card = document.createElement('div')
+            card.className = 'card'
+
+            const color = randomFrom(colors)
+            const angleRange = isMobile ? 6 : 10
+            const angle = (Math.random() - 0.5) * angleRange
+            const entryScale = isMobile ? 0.8 : 0.65
+            const cardWidth = isMobile ? 180 : 220
+            const cardHeight = isMobile ? 130 : 140
+            const horizontalMargin = isMobile ? 12 : 16
+            const verticalMargin = isMobile ? 12 : 20
+
+            let left, top
+            if (x !== null && y !== null) {
+                left = Math.min(Math.max(0, x - cardWidth / 2), window.innerWidth - cardWidth)
+                top = Math.min(Math.max(0, y - cardHeight / 2), window.innerHeight - cardHeight)
+            } else {
+                left = horizontalMargin +
+                    Math.random() *
+                        Math.max(window.innerWidth - cardWidth - horizontalMargin * 2, 0)
+                top = verticalMargin +
+                    Math.random() *
+                        Math.max(window.innerHeight - cardHeight - verticalMargin * 2, 0)
+            }
+
+            card.style.background = color
+            card.style.left = `${left}px`
+            card.style.top = `${top}px`
+            card.style.opacity = '0'
+            if (activeMaximizedCard && zIndexCursor >= MAXIMIZED_LAYER - 2) {
+                zIndexCursor = MAXIMIZED_LAYER - 2
+            }
+            card.style.zIndex = ++zIndexCursor
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="window-controls">
+                        <button class="control close" type="button" aria-label="关闭"></button>
+                        <button class="control color-change" type="button" aria-label="改变颜色"></button>
+                        <button class="control maximize" type="button" aria-label="最大化"></button>
+                    </div>
+                    <div class="card-title">温馨提示</div>
+                </div>
+                <div class="card-body">${message}</div>
+            `
+
+            const state = {
+                id: null, // 新卡片ID为空，保存后由Supabase分配
+                angle,
+                scale: entryScale,
+                left,
+                top,
+                maximized: false,
+                closing: false,
+                currentColorIndex: colors.indexOf(color),
+                editing: false
+            }
+
+            cardStates.set(card, state)
+            applyTransform(card, state)
+            board.appendChild(card)
+            
+            await saveCardToSupabase(card)
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    state.scale = 1
+                    applyTransform(card, state)
+                    card.style.opacity = '1'
+                })
+            })
+
+            while (board.children.length > maxCards) {
+                const oldest = board.firstElementChild
+                if (oldest && oldest !== card) {
+                    const oldestState = cardStates.get(oldest)
+                    if (!oldestState || (!oldestState.maximized && !oldestState.closing)) {
+                        oldest.remove()
+                        cardStates.delete(oldest)
+                    } else {
+                        break
+                    }
+                } else {
+                    break
+                }
+            }
+        }
+
+        // 页面加载时从 Supabase 恢复便签
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCardsFromSupabase();
+        })
+
+        if (typeof pointerMediaQuery.addEventListener === 'function') {
+            pointerMediaQuery.addEventListener('change', syncMobileMode)
+        } else if (typeof pointerMediaQuery.addListener === 'function') {
+            pointerMediaQuery.addListener(syncMobileMode)
+        }
+
+        window.addEventListener('resize', syncMobileMode)
+
+        let isDarkMode = false
+
+        function setDarkMode(enable) {
+            if (enable) {
+                document.body.classList.add('dark-mode')
+                document.body.classList.remove('light-mode')
+                themeToggleButton.innerHTML = '☀'
+                themeToggleButton.setAttribute('aria-label', '切换到亮色模式')
+                isDarkMode = true
+            } else {
+                document.body.classList.remove('dark-mode')
+                document.body.classList.add('light-mode')
+                themeToggleButton.innerHTML = '🌙'
+                themeToggleButton.setAttribute('aria-label', '切换到暗色模式')
+                isDarkMode = false
+            }
+            localStorage.setItem('theme', isDarkMode ? 'dark' : 'light')
+        }
+
+        const savedTheme = localStorage.getItem('theme')
+        if (savedTheme === 'dark' || savedTheme === null) {
+            setDarkMode(true)
+        } else {
+            setDarkMode(false)
+        }
+
+        themeToggleButton.addEventListener('click', (event) => {
+            if (themeButtonDragging || themeButtonHasMoved) {
+                themeButtonHasMoved = false
+                return
+            }
+            setDarkMode(!isDarkMode)
+        })
+
+        // 添加全局鼠标事件监听器，用于框选功能
+        document.addEventListener('pointerdown', handleGlobalPointerDown)
+    </script>
+</body>
+</html>
