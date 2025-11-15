@@ -507,10 +507,10 @@
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            cursor: move;
+            cursor: pointer;
             z-index: 1000001;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+            transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease;
             color: var(--text-color);
             touch-action: none;
             user-select: none;
@@ -518,16 +518,18 @@
 
         #theme-toggle:hover {
             box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+            transform: scale(1.05);
         }
 
         #theme-toggle:active {
-            transform: translateY(1px);
+            transform: scale(0.95);
         }
 
         #theme-toggle.dragging {
             transition: none;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
             z-index: 1000002;
+            cursor: grabbing;
         }
 
         .card.editing .card-body {
@@ -696,6 +698,7 @@
         let themeButtonStartX = 0;
         let themeButtonStartY = 0;
         let themeButtonHasMoved = false;
+        let themeButtonClickTimeout = null;
 
         document.body.classList.toggle('is-mobile', isMobile)
 
@@ -1055,17 +1058,32 @@
             deleteSelectedBtn.classList.remove('show')
         }
 
-        // 主题按钮拖动处理
+        // 改进的主题按钮拖动处理
         function handleThemeButtonPointerDown(event) {
             if (event.target === themeToggleButton) {
-                event.preventDefault()
-                themeButtonDragging = true
-                themeButtonHasMoved = false
+                // 记录初始位置
                 themeButtonStartX = event.clientX
                 themeButtonStartY = event.clientY
                 themeButtonOffsetX = event.clientX - themeToggleButton.offsetLeft
                 themeButtonOffsetY = event.clientY - themeToggleButton.offsetTop
+                themeButtonDragging = true
+                themeButtonHasMoved = false
+                
+                // 清除之前的点击定时器
+                if (themeButtonClickTimeout) {
+                    clearTimeout(themeButtonClickTimeout)
+                    themeButtonClickTimeout = null
+                }
+                
                 themeToggleButton.classList.add('dragging')
+                
+                // 添加点击延迟检测
+                themeButtonClickTimeout = setTimeout(() => {
+                    if (!themeButtonHasMoved && themeButtonDragging) {
+                        // 如果没有移动，设置为点击状态
+                        themeButtonHasMoved = false
+                    }
+                }, 150)
             }
         }
 
@@ -1075,27 +1093,51 @@
             const deltaX = Math.abs(event.clientX - themeButtonStartX)
             const deltaY = Math.abs(event.clientY - themeButtonStartY)
             
-            if (deltaX > 5 || deltaY > 5) {
+            // 移动阈值设为较小值，更敏感地检测拖动
+            if (deltaX > 3 || deltaY > 3) {
                 themeButtonHasMoved = true
+                
+                // 清除点击检测定时器
+                if (themeButtonClickTimeout) {
+                    clearTimeout(themeButtonClickTimeout)
+                    themeButtonClickTimeout = null
+                }
             }
 
-            const newX = event.clientX - themeButtonOffsetX
-            const newY = event.clientY - themeButtonOffsetY
+            // 只有在确认是拖动后才移动按钮
+            if (themeButtonHasMoved) {
+                const newX = event.clientX - themeButtonOffsetX
+                const newY = event.clientY - themeButtonOffsetY
 
-            const maxX = window.innerWidth - themeToggleButton.offsetWidth
-            const maxY = window.innerHeight - themeToggleButton.offsetHeight
+                const maxX = window.innerWidth - themeToggleButton.offsetWidth
+                const maxY = window.innerHeight - themeToggleButton.offsetHeight
 
-            themeToggleButton.style.left = clamp(newX, 0, maxX) + 'px'
-            themeToggleButton.style.top = clamp(newY, 0, maxY) + 'px'
-            themeToggleButton.style.right = 'auto'
-            themeToggleButton.style.bottom = 'auto'
+                themeToggleButton.style.left = clamp(newX, 0, maxX) + 'px'
+                themeToggleButton.style.top = clamp(newY, 0, maxY) + 'px'
+                themeToggleButton.style.right = 'auto'
+                themeToggleButton.style.bottom = 'auto'
+            }
         }
 
-        function handleThemeButtonPointerUp() {
+        function handleThemeButtonPointerUp(event) {
             if (!themeButtonDragging) return
 
             themeButtonDragging = false
             themeToggleButton.classList.remove('dragging')
+            
+            // 清除点击检测定时器
+            if (themeButtonClickTimeout) {
+                clearTimeout(themeButtonClickTimeout)
+                themeButtonClickTimeout = null
+            }
+            
+            // 如果没有移动，则触发点击事件
+            if (!themeButtonHasMoved) {
+                setDarkMode(!isDarkMode)
+            }
+            
+            // 重置移动状态
+            themeButtonHasMoved = false
         }
 
         board.addEventListener('click', handleBoardClick)
@@ -1761,7 +1803,7 @@
                 isDarkMode = true
             } else {
                 document.body.classList.remove('dark-mode')
-                document.classList.add('light-mode')
+                document.body.classList.add('light-mode')
                 themeToggleButton.innerHTML = '🌙'
                 themeToggleButton.setAttribute('aria-label', '切换到暗色模式')
                 isDarkMode = false
@@ -1775,14 +1817,6 @@
         } else {
             setDarkMode(false)
         }
-
-        themeToggleButton.addEventListener('click', (event) => {
-            if (themeButtonDragging || themeButtonHasMoved) {
-                themeButtonHasMoved = false
-                return
-            }
-            setDarkMode(!isDarkMode)
-        })
 
         // 添加全局鼠标事件监听器，用于框选功能
         document.addEventListener('pointerdown', handleGlobalPointerDown)
