@@ -397,6 +397,11 @@
             justify-content: center; /* 水平居中 */
         }
 
+        /* 确保最大化便签中的内容文字（包括内部标签如<span>）能正确继承并随视口大小变化 */
+        .card.maximized .card-body * {
+            font-size: inherit !important;
+        }
+
         .resize-handle {
             position: absolute;
             bottom: 0;
