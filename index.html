@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>便签墙</title>
-    <!-- 引入 Supabase 客户端库 -->
-    <script src="https://unpkg.com/@supabase/supabase-js"></script>
+    <!-- 引入 Supabase 客户端库 (已移除，因为切换到 localStorage) -->
+    <!-- <script src="./supabase.min.js"></script> -->
     <style>
         /* CSS Variables for theming */
         :root {
@@ -397,6 +397,11 @@
             justify-content: center; /* 水平居中 */
         }
 
+        /* 确保最大化便签中的内容文字（包括内部标签如<span>）能正确继承并随视口大小变化 */
+        .card.maximized .card-body * {
+            font-size: inherit !important;
+        }
+
         .resize-handle {
             position: absolute;
             bottom: 0;
@@ -632,10 +637,10 @@
     <div class="selection-mode-hint" id="selectionHint">按住Ctrl并拖动鼠标框选便签进行批量删除</div>
 
     <script>
-        // --- Supabase 初始化 ---
-        const SUPABASE_URL = 'https://wketotdrvgmijhywfqbv.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZXRvdGRydmdtaWpoeXdmcWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2NDk4NjksImV4cCI6MjA3ODIyNTg2OX0.P5lXhdebBpNOO3sjGCiALqD4xpzL1dKOKa7-9uYJQzg';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // --- Supabase 初始化 (已移除，切换到 localStorage) ---
+        // const SUPABASE_URL = 'https://wketotdrvgmijhywfqbv.supabase.co';
+        // const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZXRvdGRydmdtaWpoeXdmcWJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2NDk4NjksImV4cCI6MjA3ODIyNTg2OX0.P5lXhdebBpNOO3sjGCiALqD4xpzL1dKOKa7-9uYJQzg';
+        // const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const board = document.getElementById('board')
         const themeToggleButton = document.getElementById('theme-toggle')
@@ -700,6 +705,9 @@
         let themeButtonHasMoved = false;
         let themeButtonClickTimeout = null;
 
+        // localStorage 键名
+        const LOCAL_STORAGE_KEY = 'sticky_notes';
+
         document.body.classList.toggle('is-mobile', isMobile)
 
         function randomFrom(array) {
@@ -708,6 +716,11 @@
 
         function clamp(value, min, max) {
             return Math.min(Math.max(value, min), max)
+        }
+
+        // Helper to generate a unique ID for localStorage
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
         }
 
         function applyTransform(card, state) {
@@ -876,7 +889,7 @@
 
         function handleBoardBackgroundDoubleClick(event) {
             if (event.target === board) {
-                createCard(null, event.clientX, event.clientY)
+                createCard(null, event.clientX, event.clientY) // Pass null for cardData to indicate new card
             }
         }
 
@@ -920,10 +933,10 @@
             element.focus()
             
             // 立即保存一次，以防用户不输入直接失焦
-            await saveCardToSupabase(card);
+            await saveCardToLocalStorage(card);
 
             const handleInput = () => {
-                saveCardToSupabase(card);
+                saveCardToLocalStorage(card);
             }
 
             const handleBlur = () => {
@@ -933,7 +946,7 @@
                 element.removeEventListener('input', handleInput)
                 element.removeEventListener('blur', handleBlur)
                 // 确保失焦时也保存一次
-                saveCardToSupabase(card);
+                saveCardToLocalStorage(card);
             }
 
             const handleKeyDown = (e) => {
@@ -1152,21 +1165,23 @@
 
         deleteSelectedBtn.addEventListener('click', deleteSelectedCards)
 
-        // --- Supabase 数据操作函数 ---
+        // --- localStorage 数据操作函数 ---
 
         /**
-         * 保存或更新便签到 Supabase (Upsert)
+         * 保存或更新便签到 localStorage (Upsert)
          * @param {HTMLElement} card - 要保存的便签 DOM 元素
          */
-        async function saveCardToSupabase(card) {
+        async function saveCardToLocalStorage(card) {
             const state = cardStates.get(card);
             if (!state) return;
 
             // 获取当前便签的实际高度，如果用户手动调整过，则保存调整后的高度
             // 如果便签是自动撑开的，则保存 null，以便下次加载时仍自动撑开
-            const currentHeight = card.style.height === 'auto' ? null : card.offsetHeight;
+            const currentHeightStyle = card.style.height;
+            const savedHeight = currentHeightStyle === 'auto' || currentHeightStyle === '' ? null : card.offsetHeight;
 
             const cardData = {
+                id: state.id || generateUniqueId(), // Use existing ID or generate new one
                 title: card.querySelector('.card-title').innerText,
                 content: card.querySelector('.card-body').innerText,
                 left: state.left,
@@ -1175,208 +1190,231 @@
                 angle: state.angle,
                 scale: state.scale,
                 width: card.offsetWidth,
-                height: currentHeight, // 保存当前计算或用户设置的高度
+                height: savedHeight, // 保存当前计算或用户设置的高度
                 maximized: state.maximized,
                 currentColorIndex: state.currentColorIndex
             };
 
-            try {
-                let { data, error } = {};
-                if (!state.id) { // 新卡片，执行插入
-                    const res = await supabase.from('notes').insert(cardData).select();
-                    data = res.data;
-                    error = res.error;
-                    if (data && data.length > 0) {
-                        state.id = data[0].id; // 更新为数据库返回的 UUID
-                    }
-                } else { // 现有卡片，执行更新
-                    const res = await supabase.from('notes').update(cardData).eq('id', state.id).select();
-                    data = res.data;
-                    error = res.error;
-                }
-                
-                if (error) {
-                    console.error('保存便签时出错:', error);
-                }
-            } catch (err) {
-                console.error('请求失败:', err);
+            // Update state.id if it was newly generated
+            state.id = cardData.id;
+
+            let notes = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+            const existingIndex = notes.findIndex(note => note.id === cardData.id);
+
+            if (existingIndex > -1) {
+                notes[existingIndex] = cardData; // Update existing card
+            } else {
+                notes.push(cardData); // Add new card
             }
+
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(notes));
         }
 
         /**
-         * 从 Supabase 删除便签
+         * 从 localStorage 删除便签
          * @param {string} cardId - 要删除的便签的 ID
          */
-        async function deleteCardFromSupabase(cardId) {
+        async function deleteCardFromLocalStorage(cardId) {
             if (!cardId) return;
-            
-            const { error } = await supabase.from('notes').delete().eq('id', cardId);
-            if (error) {
-                console.error('删除便签时出错:', error);
-            }
+
+            let notes = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+            notes = notes.filter(note => note.id !== cardId);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(notes));
         }
 
         /**
-         * 从 Supabase 加载所有便签
+         * 从 localStorage 加载所有便签
          */
-        async function loadCardsFromSupabase() {
-            const { data: notes, error } = await supabase.from('notes').select('*');
-            
-            if (error) {
-                console.error('加载便签时出错:', error);
-                // 如果出错，回退到创建默认便签
-                for (let i = 0; i < messages.length; i++) {
-                    setTimeout(() => createCard(messages[i]), i * 40);
+        async function loadCardsFromLocalStorage() {
+            const notesString = localStorage.getItem(LOCAL_STORAGE_KEY);
+            let notes = [];
+            if (notesString) {
+                try {
+                    notes = JSON.parse(notesString);
+                } catch (e) {
+                    console.error('Error parsing notes from localStorage:', e);
+                    notes = []; // Fallback to empty array if parsing fails
                 }
-                return;
             }
 
             if (!notes || notes.length === 0) {
                 // 如果没有便签，创建默认的
                 for (let i = 0; i < messages.length; i++) {
-                    setTimeout(() => createCard(messages[i]), i * 40);
+                    setTimeout(() => createCard(null, null, null, messages[i]), i * 40); // Pass message as a specific argument
                 }
-                currentMessageIndex = messages.length % messages.length;
+                currentMessageIndex = messages.length % messages.length; // Reset index for future new cards
                 return;
             }
 
-            // 清除默认创建的便签（如果存在），只在首次加载时清空
-            // 避免在 Supabase 返回空数据时误删用户已有的便签
-            if (board.children.length > 0 && Array.from(board.children).every(child => cardStates.get(child)?.id === undefined)) {
-                board.innerHTML = '';
-            }
+            // 清除板上所有现有便签，以确保从 localStorage 加载的数据是唯一的来源
+            board.innerHTML = ''; 
 
             // 创建便签卡片
             notes.forEach(cardData => {
-                const card = document.createElement('div');
-                card.className = 'card';
-
-                // 确保位置数据是有效的
-                const left = typeof cardData.left === 'number' ? cardData.left : 50;
-                const top = typeof cardData.top === 'number' ? cardData.top : 50;
-                
-                // 确保位置在视窗范围内
-                const safeLeft = clamp(left, 0, window.innerWidth - (cardData.width || 220));
-                const safeTop = clamp(top, 0, window.innerHeight - (cardData.height || 140));
-
-                card.style.background = cardData.color;
-                card.style.width = `${cardData.width || 220}px`;
-                // 如果 height 为 null，则让内容自动撑开
-                card.style.height = cardData.height ? `${cardData.height}px` : 'auto'; 
-                card.style.left = `${safeLeft}px`;
-                card.style.top = `${safeTop}px`;
-                card.style.zIndex = ++zIndexCursor;
-
-                card.innerHTML = `
-                    <div class="card-header">
-                        <div class="window-controls">
-                            <button class="control close" type="button" aria-label="关闭"></button>
-                            <button class="control copy" type="button" aria-label="复制内容"></button>
-                            <button class="control color-change" type="button" aria-label="改变颜色"></button>
-                            <button class="control maximize" type="button" aria-label="最大化"></button>
-                        </div>
-                        <div class="card-title" contenteditable="false">${cardData.title || ''}</div>
-                    </div>
-                    <div class="card-body-container">
-                        <div class="card-body" contenteditable="false">${cardData.content || ''}</div>
-                        <div class="resize-handle"></div>
-                    </div>
-                `;
-
-                board.appendChild(card);
-
-                const state = {
-                    id: cardData.id, // 使用 Supabase 的 UUID
-                    angle: cardData.angle || 0,
-                    scale: cardData.scale || 1,
-                    left: safeLeft,
-                    top: safeTop,
-                    maximized: cardData.maximized || false,
-                    closing: false,
-                    currentColorIndex: cardData.currentColorIndex || 0,
-                    editing: false,
-                    dragging: false,
-                    resizing: false,
-                    dragOffsetX: 0,
-                    dragOffsetY: 0,
-                    width: cardData.width || 220,
-                    height: cardData.height || null // 存储加载的高度，null 表示自动
-                };
-
-                cardStates.set(card, state);
-                applyTransform(card, state);
-
-                // 显示动画
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        card.style.opacity = '1';
-                        card.style.cursor = 'move';
-                    });
-                });
+                createCard(cardData); // Use the modified createCard function to load data
             });
         }
 
-        // 调整大小功能
-        function startResize(event, card) {
-            const state = cardStates.get(card)
-            if (!state || state.closing || state.maximized || isMobile) return
+        /**
+         * 创建一个新便签或从现有数据加载便签
+         * @param {Object} cardData - 可选，用于从 localStorage 加载便签的数据对象
+         * @param {number} x - 可选，新便签的 X 坐标 (仅在 cardData 为 null 时使用)
+         * @param {number} y - 可选，新便签的 Y 坐标 (仅在 cardData 为 null 时使用)
+         * @param {string} messageContentOverride - 可选，覆盖默认消息内容 (仅在 cardData 为 null 时使用)
+         */
+        async function createCard(cardData = null, x = null, y = null, messageContentOverride = null) {
+            const isNewCard = cardData === null;
+            let message = messageContentOverride;
 
-            event.preventDefault()
-            event.stopPropagation()
-
-            card.classList.add('resizing')
-            state.resizing = true
-
-            const startX = event.clientX
-            const startY = event.clientY
-            const startWidth = card.offsetWidth
-            const startHeight = card.offsetHeight
-            // const startLeft = state.left; // 调整大小不改变位置
-            // const startTop = state.top;
-
-            let resizeFrame = null
-
-            const commitResize = async () => {
-                resizeFrame = null
-                // 更新 state 中的 width 和 height
-                state.width = card.offsetWidth
-                state.height = card.offsetHeight
-                await saveCardToSupabase(card)
+            if (isNewCard) {
+                message = messageContentOverride !== null ? messageContentOverride : messages[currentMessageIndex];
+                currentMessageIndex = (currentMessageIndex + 1) % messages.length;
+            } else {
+                // When loading from storage, use the content from cardData
+                message = cardData.content;
             }
 
-            const handlePointerMove = moveEvent => {
-                if (!state.resizing) return
+            const card = document.createElement('div');
+            card.className = 'card';
 
-                const deltaX = moveEvent.clientX - startX
-                const deltaY = moveEvent.clientY - startY
+            const color = isNewCard ? randomFrom(colors) : cardData.color;
+            const angleRange = isMobile ? 6 : 10;
+            const angle = isNewCard ? (Math.random() - 0.5) * angleRange : cardData.angle;
+            const entryScale = isMobile ? 0.8 : 0.65;
+            const scale = isNewCard ? entryScale : cardData.scale;
 
-                const newWidth = Math.max(150, startWidth + deltaX) // 最小宽度
-                const newHeight = Math.max(100, startHeight + deltaY) // 最小高度
+            // 随机选择一个初始尺寸
+            const randomDimension = randomFrom(initialCardDimensions);
+            const cardWidth = isNewCard ? (isMobile ? 180 : randomDimension.width) : cardData.width;
+            // 初始高度设置为 auto，让内容撑开，除非有保存的高度
+            const cardInitialHeight = isNewCard ? (isMobile ? 130 : randomDimension.height) : (cardData.height || 'auto');
 
-                card.style.width = newWidth + 'px'
-                card.style.height = newHeight + 'px' // 明确设置高度，覆盖 auto
+            const horizontalMargin = isMobile ? 12 : 16;
+            const verticalMargin = isMobile ? 12 : 20;
 
-                if (resizeFrame === null) {
-                    resizeFrame = requestAnimationFrame(commitResize)
-                }
-            }
-
-            const handlePointerUp = () => {
-                state.resizing = false
-                card.classList.remove('resizing')
-                if (resizeFrame !== null) {
-                    cancelAnimationFrame(resizeFrame)
-                    commitResize()
+            let left, top;
+            if (isNewCard) {
+                if (x !== null && y !== null) {
+                    // 如果是双击背景创建，位置在点击处附近
+                    left = Math.min(Math.max(0, x - cardWidth / 2), window.innerWidth - cardWidth);
+                    top = Math.min(Math.max(0, y - (typeof cardInitialHeight === 'number' ? cardInitialHeight : 140) / 2), window.innerHeight - (typeof cardInitialHeight === 'number' ? cardInitialHeight : 140));
                 } else {
-                    // 如果没有移动，也提交一次，确保 state.width/height 更新
-                    commitResize();
+                    // 否则随机位置
+                    left = horizontalMargin +
+                        Math.random() *
+                        Math.max(window.innerWidth - cardWidth - horizontalMargin * 2, 0);
+                    top = verticalMargin +
+                        Math.random() *
+                        Math.max(window.innerHeight - (typeof cardInitialHeight === 'number' ? cardInitialHeight : 140) - verticalMargin * 2, 0);
                 }
-                document.removeEventListener('pointermove', handlePointerMove)
-                document.removeEventListener('pointerup', handlePointerUp)
+            } else {
+                left = cardData.left;
+                top = cardData.top;
             }
 
-            document.addEventListener('pointermove', handlePointerMove)
-            document.addEventListener('pointerup', handlePointerUp)
+            // Ensure position is within bounds for loaded cards too
+            const safeLeft = clamp(left, 0, window.innerWidth - cardWidth);
+            const safeTop = clamp(top, 0, window.innerHeight - (typeof cardInitialHeight === 'number' ? cardInitialHeight : 140));
+
+
+            card.style.background = color;
+            card.style.left = `${safeLeft}px`;
+            card.style.top = `${safeTop}px`;
+            card.style.width = `${cardWidth}px`;
+            card.style.height = (typeof cardInitialHeight === 'number' ? `${cardInitialHeight}px` : 'auto'); // Apply saved height or 'auto'
+            
+            if (activeMaximizedCard && zIndexCursor >= MAXIMIZED_LAYER - 2) {
+                zIndexCursor = MAXIMIZED_LAYER - 2;
+            }
+            card.style.zIndex = ++zIndexCursor;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="window-controls">
+                        <button class="control close" type="button" aria-label="关闭"></button>
+                        <button class="control copy" type="button" aria-label="复制内容"></button>
+                        <button class="control color-change" type="button" aria-label="改变颜色"></button>
+                        <button class="control maximize" type="button" aria-label="最大化"></button>
+                    </div>
+                    <div class="card-title" contenteditable="false">${cardData ? cardData.title : (messageContentOverride ? '温馨提示' : '')}</div>
+                </div>
+                <div class="card-body-container">
+                    <div class="card-body" contenteditable="false">${message || ''}</div>
+                    <div class="resize-handle"></div>
+                </div>
+            `;
+
+            const state = {
+                id: cardData ? cardData.id : null, // Use existing ID or null for new card
+                angle: angle,
+                scale: scale,
+                left: safeLeft,
+                top: safeTop,
+                maximized: cardData ? cardData.maximized : false,
+                closing: false,
+                currentColorIndex: cardData ? cardData.currentColorIndex : colors.indexOf(color),
+                editing: false,
+                dragging: false,
+                resizing: false,
+                dragOffsetX: 0,
+                dragOffsetY: 0,
+                width: cardWidth,
+                height: cardData ? cardData.height : null // Store loaded height or null for auto
+            };
+
+            cardStates.set(card, state);
+            applyTransform(card, state);
+            board.appendChild(card);
+
+            if (isNewCard) {
+                await saveCardToLocalStorage(card); // Save new card immediately
+            } else {
+                // For loaded cards, ensure their state is correctly set up.
+                // If a loaded card was maximized, reapply maximized state (visuals only)
+                if (state.maximized) {
+                    card.classList.add('maximized');
+                    card.style.position = 'fixed';
+                    card.style.left = '0px';
+                    card.style.top = '0px';
+                    card.style.width = '100vw';
+                    card.style.height = '100dvh';
+                    card.style.borderRadius = '0';
+                    bringToFront(card);
+                    activeMaximizedCard = card;
+                    updateBodyMaximizedState();
+                    setupEditMode(card); // Re-enable edit mode for maximized card
+                }
+            }
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (isNewCard) {
+                        state.scale = 1;
+                        applyTransform(card, state);
+                    }
+                    card.style.opacity = '1';
+                });
+            });
+
+            // 限制便签数量
+            if (isNewCard) { // 仅对新创建的便签进行数量限制
+                while (board.children.length > maxCards) {
+                    const oldest = board.firstElementChild;
+                    if (oldest && oldest !== card) {
+                        const oldestState = cardStates.get(oldest);
+                        // 只有当便签不是最大化状态且不是正在关闭时才移除
+                        if (oldestState && !oldestState.maximized && !oldestState.closing) {
+                            await deleteCardFromLocalStorage(oldestState.id); // 从 localStorage 删除
+                            oldest.remove();
+                            cardStates.delete(oldest);
+                        } else {
+                            break; // 如果最旧的便签是最大化或正在关闭，则停止移除
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
         }
 
         async function closeCard(card) {
@@ -1391,9 +1429,9 @@
             card.style.opacity = '0'
             applyTransform(card, state)
 
-            // 从 Supabase 删除
+            // 从 localStorage 删除
             if (state.id) {
-                await deleteCardFromSupabase(state.id)
+                await deleteCardFromLocalStorage(state.id)
             }
 
             const handleTransitionEnd = event => {
@@ -1456,7 +1494,7 @@
             state.maximized = true
             updateBodyMaximizedState()
 
-            await saveCardToSupabase(card);
+            await saveCardToLocalStorage(card);
             setupEditMode(card)
         }
 
@@ -1483,7 +1521,7 @@
             }
             
             const autoSave = () => {
-                saveCardToSupabase(card); 
+                saveCardToLocalStorage(card); 
             }
 
             title.addEventListener('input', autoSave)
@@ -1527,7 +1565,7 @@
                     button.classList.toggle('active', body.classList.contains('wavy'))
                     break
             }
-            await saveCardToSupabase(card)
+            await saveCardToLocalStorage(card)
         }
 
         function restoreFromMaximize(card, state) {
@@ -1619,7 +1657,7 @@
                 card.style.left = `${state.left}px`
                 card.style.top = `${state.top}px`
                 
-                await saveCardToSupabase(card)
+                await saveCardToLocalStorage(card)
             }
 
             const handlePointerMove = moveEvent => {
@@ -1661,127 +1699,12 @@
             card.style.background = newColor
             state.currentColorIndex = nextIndex
             
-            await saveCardToSupabase(card)
+            await saveCardToLocalStorage(card)
         }
 
-        async function createCard(messageContent = null, x = null, y = null) {
-            const message = messageContent !== null
-                ? messageContent
-                : messages[currentMessageIndex]
-
-            if (messageContent === null) {
-                currentMessageIndex = (currentMessageIndex + 1) % messages.length
-            }
-
-            const card = document.createElement('div')
-            card.className = 'card'
-
-            const color = randomFrom(colors)
-            const angleRange = isMobile ? 6 : 10
-            const angle = (Math.random() - 0.5) * angleRange
-            const entryScale = isMobile ? 0.8 : 0.65
-            
-            // 随机选择一个初始尺寸
-            const randomDimension = randomFrom(initialCardDimensions);
-            const cardWidth = isMobile ? 180 : randomDimension.width;
-            // 初始高度设置为 auto，让内容撑开
-            const cardInitialHeight = isMobile ? 130 : randomDimension.height; 
-
-            const horizontalMargin = isMobile ? 12 : 16
-            const verticalMargin = isMobile ? 12 : 20
-
-            let left, top
-            if (x !== null && y !== null) {
-                // 如果是双击背景创建，位置在点击处附近
-                left = Math.min(Math.max(0, x - cardWidth / 2), window.innerWidth - cardWidth)
-                top = Math.min(Math.max(0, y - cardInitialHeight / 2), window.innerHeight - cardInitialHeight)
-            } else {
-                // 否则随机位置
-                left = horizontalMargin +
-                    Math.random() *
-                        Math.max(window.innerWidth - cardWidth - horizontalMargin * 2, 0)
-                top = verticalMargin +
-                    Math.random() *
-                        Math.max(window.innerHeight - cardInitialHeight - verticalMargin * 2, 0)
-            }
-
-            card.style.background = color
-            card.style.left = `${left}px`
-            card.style.top = `${top}px`
-            card.style.width = `${cardWidth}px`
-            card.style.height = 'auto'; // 默认高度为 auto，让内容撑开
-            if (activeMaximizedCard && zIndexCursor >= MAXIMIZED_LAYER - 2) {
-                zIndexCursor = MAXIMIZED_LAYER - 2
-            }
-            card.style.zIndex = ++zIndexCursor
-
-            card.innerHTML = `
-                <div class="card-header">
-                    <div class="window-controls">
-                        <button class="control close" type="button" aria-label="关闭"></button>
-                        <button class="control copy" type="button" aria-label="复制内容"></button>
-                        <button class="control color-change" type="button" aria-label="改变颜色"></button>
-                        <button class="control maximize" type="button" aria-label="最大化"></button>
-                    </div>
-                    <div class="card-title" contenteditable="false">${messageContent ? '温馨提示' : ''}</div>
-                </div>
-                <div class="card-body-container">
-                    <div class="card-body" contenteditable="false">${message || ''}</div>
-                    <div class="resize-handle"></div>
-                </div>
-            `
-
-            const state = {
-                id: null, // 新卡片ID为空，保存后由Supabase分配
-                angle,
-                scale: entryScale,
-                left,
-                top,
-                maximized: false,
-                closing: false,
-                currentColorIndex: colors.indexOf(color),
-                editing: false,
-                width: cardWidth,
-                height: null // 初始高度为 null，表示自动
-            }
-
-            cardStates.set(card, state)
-            applyTransform(card, state)
-            board.appendChild(card)
-            
-            await saveCardToSupabase(card)
-
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    state.scale = 1
-                    applyTransform(card, state)
-                    card.style.opacity = '1'
-                })
-            })
-
-            // 限制便签数量
-            while (board.children.length > maxCards) {
-                const oldest = board.firstElementChild
-                if (oldest && oldest !== card) {
-                    const oldestState = cardStates.get(oldest)
-                    // 只有当便签不是最大化状态且不是正在关闭时才移除
-                    if (!oldestState || (!oldestState.maximized && !oldestState.closing)) {
-                        // 注意：这里只是从DOM移除，并没有从Supabase删除
-                        // 如果需要从Supabase删除，需要调用 deleteCardFromSupabase(oldestState.id)
-                        oldest.remove()
-                        cardStates.delete(oldest)
-                    } else {
-                        break // 如果最旧的便签是最大化或正在关闭，则停止移除
-                    }
-                } else {
-                    break
-                }
-            }
-        }
-
-        // 页面加载时从 Supabase 恢复便签
+        // 页面加载时从 localStorage 恢复便签
         window.addEventListener('DOMContentLoaded', () => {
-            loadCardsFromSupabase();
+            loadCardsFromLocalStorage();
         })
 
         if (typeof pointerMediaQuery.addEventListener === 'function') {
